@@ -10,24 +10,19 @@ function error() {
 
 mkdir -p obj/plans
 
-terraform init deploy/dev || {
-    error "Terraform init failed"
-}
-
-terraform validate deploy/dev || {
-    error "Terraform validate failed"
-}
-
-terraform plan -out obj/plans/dev deploy/dev || {
-    error "Terraform plan failed"
-}
-
-terraform apply obj/plans/dev || {
-    error "Terraform apply failed"
-}
+terraform init deploy/dev || error "Terraform init failed"
+terraform validate deploy/dev || error "Terraform validate failed"
+terraform plan -out obj/plans/dev deploy/dev || error "Terraform plan failed"
+terraform apply obj/plans/dev || error "Terraform apply failed"
 
 az storage file upload-batch --account-key "$(terraform output storage_account_key)" --account-name "$(terraform output storage_account_name)" --destination "files" --destination-path "app" --source "obj/sites/HelloWorld" || {
     error "Uploading web application failed"
 }
 
-echo "Open browser to http://$(terraform output fqdn)"
+az container restart --resource-group "$(terraform output resource_group_name)" --name "$(terraform output container_group_name)" || {
+    error "Container restart failed"
+}
+
+echo "ContainerGroup http://$(terraform output aci_fqdn)"
+
+echo "FrontDoor http://$(terraform output afd_fqdn) https://$(terraform output afd_fqdn)"

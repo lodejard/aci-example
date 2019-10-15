@@ -1,11 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>netcoreapp3.0</TargetFramework>
+    </PropertyGroup>
 
-
-  <ItemGroup>
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection.AzureKeyVault" Version="3.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection.AzureStorage" Version="3.0.0" />
+        <PackageReference Include="Microsoft.Azure.Management.Fluent" Version="1.27.0" />
+        <PackageReference Include="Microsoft.Azure.Management.ResourceManager.Fluent" Version="1.27.0" />
+    </ItemGroup>
 
 </Project>

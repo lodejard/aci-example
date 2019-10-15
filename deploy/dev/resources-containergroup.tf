@@ -1,41 +1,16 @@
 
-provider "azurerm" {
-    version = "~> 1.35"
-}
-
-provider "random" {
-    version = "~> 2.2"
-}
 
 resource "azurerm_resource_group" "aci_example" {
-  name     = "aci-example-dev"
-  location = "westus2"
+  name     = "${var.resource_group_name}"
+  location = "${var.location}"
 }
 
-resource "random_id" "storage_account" {
+# create managed identity for application to access resources
+
+resource "random_id" "containergroup_suffix" {
     byte_length = 5
 }
 
-resource "random_id" "dns_suffix" {
-    byte_length = 5
-}
-
-# create storage account and file share to hold application code
-resource "azurerm_storage_account" "aci_example" {
-  name                     = "aciexample${lower(random_id.storage_account.hex)}"
-  resource_group_name      = "${azurerm_resource_group.aci_example.name}"
-  location                 = "${azurerm_resource_group.aci_example.location}"
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-
-resource "azurerm_storage_share" "aci_example" {
-  name                 = "files"
-  storage_account_name = "${azurerm_storage_account.aci_example.name}"
-  quota                = 50
-}
-
-# create managed identity for app to access related resources
 resource "azurerm_user_assigned_identity" "aci_example" {
     name = "hello-world-identity"
     resource_group_name = "${azurerm_resource_group.aci_example.name}"
@@ -43,11 +18,13 @@ resource "azurerm_user_assigned_identity" "aci_example" {
 }
 
 resource "azurerm_container_group" "aci_example" {
+    depends_on = ["azurerm_storage_share.aci_example"]
+
     name = "aci_example"
     resource_group_name = "${azurerm_resource_group.aci_example.name}"
     location            = "${azurerm_resource_group.aci_example.location}"
     ip_address_type     = "public"
-    dns_name_label      = "aci-example-${lower(random_id.dns_suffix.hex)}"
+    dns_name_label      = "aci-example-${lower(random_id.containergroup_suffix.hex)}"
     os_type             = "Linux"
 
     identity {
@@ -56,8 +33,8 @@ resource "azurerm_container_group" "aci_example" {
     }
 
     container {
-        name   = "hello-world"
-        image  = "mcr.microsoft.com/dotnet/core/sdk:3.0"
+        name   = "web-app"
+        image  = "mcr.microsoft.com/dotnet/core/aspnet:3.0"
         cpu    = "0.5"
         memory = "1.5"
 
@@ -66,6 +43,11 @@ resource "azurerm_container_group" "aci_example" {
         environment_variables = {
           ASPNETCORE_URLS = "http://0.0.0.0:80"
           ASPNETCORE_ENVIRONMENT = "Development"
+          HelloWorld__Azure__TenantId = "${data.azurerm_subscription.current.tenant_id}"
+          HelloWorld__Azure__SubscriptionId = "${data.azurerm_subscription.current.subscription_id}"
+          HelloWorld__DataProtection__Enabled = "true"
+          HelloWorld__DataProtection__StorageAccountIdentifier = "${azurerm_storage_account.aci_example.id}"
+          HelloWorld__DataProtection__KeyIdentifier = "${azurerm_key_vault_key.aci_example.id}"
         }
 
         ports {
@@ -73,10 +55,26 @@ resource "azurerm_container_group" "aci_example" {
             protocol = "TCP"
         }
 
+        readiness_probe {
+            http_get {
+                path = "/-/ready"
+                scheme = "Http"
+                port = 80
+            }
+        }
+
+        liveness_probe {
+            http_get {
+                path = "/-/alive"
+                scheme = "Http"
+                port = 80
+            }
+        }
+
         volume {
             name       = "files"
             mount_path = "/files"
-            read_only  = false
+            read_only  = true
             share_name = "${azurerm_storage_share.aci_example.name}"
 
             storage_account_name = "${azurerm_storage_account.aci_example.name}"
@@ -84,4 +82,3 @@ resource "azurerm_container_group" "aci_example" {
         }
     }
 }
-

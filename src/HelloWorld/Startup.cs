@@ -8,6 +8,15 @@ using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Azure.KeyVault;
+using Microsoft.Rest;
+using HelloWorld.Settings;
+using Microsoft.Azure.Storage;
+using Microsoft.Azure.Storage.Auth;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
+using Microsoft.Azure.Management.Fluent;
 
 namespace HelloWorld
 {
@@ -24,6 +33,42 @@ namespace HelloWorld
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddControllersWithViews();
+
+            var settings = new ApplicationSettings();
+            Configuration.Bind("HelloWorld", settings);
+
+            if (settings.DataProtection.Enabled)
+            {
+                AzureEnvironment azureEnvironment = AzureEnvironment.FromName(settings.Azure.AzureEnvironment);
+
+                var managedIdentityCredentials = SdkContext.AzureCredentialsFactory.FromMSI(
+                    new MSILoginInformation(MSIResourceType.VirtualMachine),
+                    azureEnvironment,
+                    settings.Azure.TenantId);
+
+                var azure = Azure
+                    .Configure()
+                    .Authenticate(managedIdentityCredentials)
+                    .WithSubscription(settings.Azure.SubscriptionId);
+
+                var storageAccount = azure.StorageAccounts.GetById(settings.DataProtection.StorageAccountIdentifier);
+
+                var storageAccountKeys = storageAccount.GetKeys();
+
+                var storageAccountConnectionString =
+                    $"DefaultEndpointsProtocol=https;" +
+                    $"AccountName={storageAccount.Name};" +
+                    $"AccountKey={storageAccountKeys[0].Value};" +
+                    $"EndpointSuffix={azureEnvironment.StorageEndpointSuffix}";
+
+                var cloudStorageAccount = CloudStorageAccount.Parse(storageAccountConnectionString);
+
+                var keyVaultClient = new KeyVaultClient(managedIdentityCredentials);
+
+                services.AddDataProtection()
+                    .PersistKeysToAzureBlobStorage(cloudStorageAccount, settings.DataProtection.StorageAccountRelativePath)
+                    .ProtectKeysWithAzureKeyVault(keyVaultClient, settings.DataProtection.KeyIdentifier);
+            }
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -39,7 +84,7 @@ namespace HelloWorld
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
-            app.UseHttpsRedirection();
+            // app.UseHttpsRedirection();
             app.UseStaticFiles();
 
             app.UseRouting();
