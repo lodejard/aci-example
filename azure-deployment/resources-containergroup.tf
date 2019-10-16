@@ -17,6 +17,8 @@ resource "azurerm_user_assigned_identity" "aci_example" {
     location            = "${azurerm_resource_group.aci_example.location}"
 }
 
+# create container to run
+
 resource "azurerm_container_group" "aci_example" {
     depends_on = ["azurerm_storage_share.aci_example"]
 
@@ -42,7 +44,7 @@ resource "azurerm_container_group" "aci_example" {
 
         environment_variables = {
           ASPNETCORE_URLS = "http://0.0.0.0:80"
-          ASPNETCORE_ENVIRONMENT = "Development"
+          ASPNETCORE_ENVIRONMENT = "Production"
           HelloWorld__Azure__TenantId = "${data.azurerm_subscription.current.tenant_id}"
           HelloWorld__Azure__SubscriptionId = "${data.azurerm_subscription.current.subscription_id}"
           HelloWorld__DataProtection__Enabled = "true"

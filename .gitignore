@@ -4,4 +4,5 @@ obj
 .vs/
 *.user
 .terraform/
+.terraform.tfstate*
 terraform.tfstate*
